@@ -1,0 +1,103 @@
+name: Release APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag del release (ej. v1.0)"
+        required: true
+        default: "v1.0"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Resolve release tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="$GITHUB_REF_NAME"
+          fi
+          if [ -z "$TAG" ]; then
+            echo "::error::No se pudo determinar el tag del release"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "apk=EmptyViewsApp-$TAG.apk" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
+
+      - name: Run local unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Build debug APK (instalable)
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Prepare release assets
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          APK: ${{ steps.meta.outputs.apk }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          sha256sum "$APK" > SHA256SUMS.txt
+          cat > RELEASE_NOTES.md <<EOF
+          APK funcional de **EmptyViewsApp $TAG** (Empty Views Activity — Java + XML).
+
+          **Qué hace:** al abrirla muestra una pantalla con el texto "Hello World!" usando el tema Material3 Día/Noche.
+
+          **Descarga e instalación:**
+          1. Descarga **EmptyViewsApp-$TAG.apk** en tu Android (enlace directo abajo, en *Assets*).
+          2. Ábrelo y, si Android lo pide, permite "instalar apps desconocidas" para tu navegador o gestor de archivos.
+          3. Toca **Instalar** → **Abrir**.
+
+          **Requisitos:** Android 7.0 (API 24) o superior.
+
+          **Detalles técnicos:** Gradle 8.7, Android Gradle Plugin 8.5.2, JDK 17, SDK 34. APK de debug (firmado con la clave debug de Android): listo para instalar en tu dispositivo; no apto para publicar en Google Play. Suma de verificación en el archivo adjunto SHA256SUMS.txt.
+          EOF
+          ls -lh "$APK" SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          APK: ${{ steps.meta.outputs.apk }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" SHA256SUMS.txt --clobber
+            gh release edit "$TAG" --title "EmptyViewsApp $TAG" --notes-file RELEASE_NOTES.md
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "EmptyViewsApp $TAG" \
+              --notes-file RELEASE_NOTES.md \
+              "$APK" SHA256SUMS.txt
+          fi
+          gh release view "$TAG"

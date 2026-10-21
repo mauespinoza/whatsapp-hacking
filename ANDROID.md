@@ -73,6 +73,24 @@ what `installDebug` does on your machine.
 5. uploads **`app-debug-apk`** (`app-debug.apk`) as a workflow artifact
    (Actions tab → run → Artifacts).
 
+## Download a ready-to-install APK (GitHub Releases)
+
+**Direct download — `EmptyViewsApp-v1.0.apk`:**
+https://github.com/mauespinoza/whatsapp-hacking/releases/download/v1.0/EmptyViewsApp-v1.0.apk
+
+All published versions: https://github.com/mauespinoza/whatsapp-hacking/releases
+
+Download the APK on your phone (Android 7.0 / API 24+), open it, allow
+"install unknown apps" for your browser/file manager if Android asks, then
+**Install → Open**. The APK is debug-signed, so it installs on a device as-is
+(it is not a Google Play release build). Each release also attaches
+`SHA256SUMS.txt` to verify the download.
+
+To publish a new version: bump `versionCode`/`versionName` in
+`app/build.gradle`, commit, then push a `vX.Y` tag —
+`.github/workflows/release-apk.yml` rebuilds and attaches
+`EmptyViewsApp-vX.Y.apk` to a new GitHub Release automatically.
+
 ## Other useful tasks
 
 ```text
